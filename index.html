@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Last Detention - Horror Game</title>
+  <!-- Load p5.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0b0b0b;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: #fff;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    h1 {
+      margin: 5px;
+      font-size: 24px;
+      color: #b30000;
+      letter-spacing: 2px;
+    }
+    #instructions {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>BLACKWOOD ACADEMY: THE LAST DETENTION</h1>
+  <div id="instructions">Use WASD to Move | Move Mouse to Aim Flashlight | Collect 3 Keys & Escape!</div>
+
+  <script>
+    let player;
+    let monster;
+    let keys = [];
+    let gameState = "START"; // START, PLAY, JUMPSCARE, WIN
+    let score = 0;
+    let jumpscareTimer = 0;
+
+    let exitDoor = { x: 400, y: 40, w: 60, h: 20 };
+
+    function setup() {
+      let canvas = createCanvas(800, 600);
+      resetGame();
+    }
+
+    function resetGame() {
+      player = { x: 400, y: 530, r: 16, speed: 3.5 };
+      monster = { x: 400, y: 150, r: 18, speed: 1.8 };
+      keys = [
+        { x: 150, y: 120, collected: false },
+        { x: 650, y: 120, collected: false },
+        { x: 400, y: 300, collected: false }
+      ];
+      score = 0;
+      gameState = "PLAY";
+    }
+
+    function draw() {
+      background(12);
+
+      if (gameState === "START") {
+        drawStartScreen();
+      } else if (gameState === "PLAY") {
+        updateGame();
+        drawGame();
+      } else if (gameState === "JUMPSCARE") {
+        drawJumpscare();
+      } else if (gameState === "WIN") {
+        drawWinScreen();
+      }
+    }
+
+    function drawStartScreen() {
+      textAlign(CENTER, CENTER);
+      fill(180, 0, 0);
+      textSize(32);
+      text("THE LAST DETENTION", width / 2, height / 2 - 40);
+      fill(200);
+      textSize(16);
+      text("Press [SPACEBAR] to Enter the School", width / 2, height / 2 + 20);
+    }
+
+    function keyPressed() {
+      if (gameState === "START" && key === ' ') {
+        gameState = "PLAY";
+      } else if ((gameState === "JUMPSCARE" || gameState === "WIN") && key === ' ') {
+        resetGame();
+      }
+    }
+
+    function updateGame() {
+      // Player movement
+      if (keyIsDown(87) || keyIsDown(UP_ARROW)) player.y -= player.speed;
+      if (keyIsDown(83) || keyIsDown(DOWN_ARROW)) player.y += player.speed;
+      if (keyIsDown(65) || keyIsDown(LEFT_ARROW)) player.x -= player.speed;
+      if (keyIsDown(68) || keyIsDown(RIGHT_ARROW)) player.x += player.speed;
+
+      // Boundaries
+      player.x = constrain(player.x, 30, width - 30);
+      player.y = constrain(player.y, 30, height - 30);
+
+      // Monster AI (Chases player slowly)
+      let angleToPlayer = atan2(player.y - monster.y, player.x - monster.x);
+      monster.x += cos(angleToPlayer) * monster.speed;
+      monster.y += sin(angleToPlayer) * monster.speed;
+
+      // Check key collections
+      for (let k of keys) {
+        if (!k.collected && dist(player.x, player.y, k.x, k.y) < 25) {
+          k.collected = true;
+          score++;
+        }
+      }
+
+      // Check collision with monster (Jumpscare trigger)
+      if (dist(player.x, player.y, monster.x, monster.y) < player.r + monster.r) {
+        gameState = "JUMPSCARE";
+        jumpscareTimer = millis();
+      }
+
+      // Check win condition (All keys collected + reached door)
+      if (score >= 3 && player.y <= exitDoor.y + 20 && player.x > exitDoor.x - 30 && player.x < exitDoor.x + exitDoor.w + 30) {
+        gameState = "WIN";
+      }
+    }
+
+    function drawGame() {
+      // Draw School Environment (Floor tiles & walls)
+      stroke(30);
+      noFill();
+      rect(20, 20, width - 40, height - 40);
+
+      // Draw Exit Door
+      noStroke();
+      fill(score >= 3 ? color(0, 200, 0) : color(80, 0, 0));
+      rect(exitDoor.x, exitDoor.y, exitDoor.w, exitDoor.h);
+      fill(255);
+      textSize(10);
+      textAlign(CENTER);
+      text(score >= 3 ? "EXIT OPEN" : "LOCKED", exitDoor.x + exitDoor.w/2, exitDoor.y - 5);
+
+      // Draw Keys
+      for (let k of keys) {
+        if (!k.collected) {
+          fill(255, 215, 0);
+          ellipse(k.x, k.y, 10, 10);
+          // Key glow
+          noFill();
+          stroke(255, 215, 0, 100);
+          ellipse(k.x, k.y, 20, 20);
+        }
+      }
+
+      // Draw Monster (Subtle red glow in dark)
+      noStroke();
+      fill(150, 0, 0, 150);
+      ellipse(monster.x, monster.y, 45, 45);
+      fill(255, 0, 0);
+      ellipse(monster.x, monster.y, monster.r * 2, monster.r * 2);
+
+      // Draw Player
+      fill(100, 150, 255);
+      ellipse(player.x, player.y, player.r * 2, player.r * 2);
+
+      // Flashlight Shadow Overlay (Darkness with light beam cone)
+      drawDarknessAndFlashlight();
+
+      // UI HUD
+      fill(255);
+      textSize(14);
+      textAlign(LEFT, TOP);
+      text("Keys Collected: " + score + " / 3", 30, 30);
+    }
+
+    function drawDarknessAndFlashlight() {
+      // Create dark overlay
+      loadPixels();
+      
+      // We simulate a flashlight cone pointing toward the mouse
+      let fAngle = atan2(mouseY - player.y, mouseX - player.x);
+      
+      noStroke();
+      // Draw darkness using a custom graphics layer effect via overlapping translucent shapes
+      // For simplicity in p5.js, we draw a massive dark overlay with a transparent hole cutout using blendMode or gradient circles
+      
+      push();
+      // Draw radial darkness mask around player
+      fill(5, 5, 8, 235);
+      rect(0, 0, width, height);
+
+      // Cut out flashlight beam
+      blendMode(REMOVE);
+      fill(255, 255, 255, 255);
+      
+      beginShape();
+      vertex(player.x, player.y);
+      let rayCount = 15;
+      let spread = PI / 3;
+      for (let i = -rayCount/2; i <= rayCount/2; i++) {
+        let a = fAngle + (spread / rayCount) * i;
+        let r = 220; // flashlight range
+        vertex(player.x + cos(a) * r, player.y + sin(a) * r);
+      }
+      endShape(CLOSE);
+      
+      pop();
+      blendMode(BLEND);
+    }
+
+    function drawJumpscare() {
+      background(random(180, 255), 0, 0); // Flashing red screen
+      
+      // Draw terrifying face graphic
+      fill(0);
+      ellipse(width/2, height/2, 300, 400);
+      
+      fill(255, 255, 0);
+      ellipse(width/2 - 60, height/2 - 40, 50, 30);
+      ellipse(width/2 + 60, height/2 - 40, 50, 30);
+      
+      fill(255, 0, 0);
+      ellipse(width/2 - 60, height/2 - 40, 20, 20);
+      ellipse(width/2 + 60, height/2 - 40, 20, 20);
+
+      fill(255);
+      rect(width/2 - 80, height/2 + 80, 160, 40);
+
+      textAlign(CENTER, CENTER);
+      fill(0);
+      textSize(24);
+      text("GOTCHA!", width/2, height/2 + 100);
+
+      fill(255);
+      textSize(16);
+      text("The Headmaster caught you. Press [SPACEBAR] to Retry.", width/2, height/2 + 180);
+    }
+
+    function drawWinScreen() {
+      background(0, 50, 0);
+      textAlign(CENTER, CENTER);
+      fill(0, 255, 0);
+      textSize(32);
+      text("YOU ESCAPED BLACKWOOD!", width/2, height/2 - 20);
+      fill(255);
+      textSize(16);
+      text("Press [SPACEBAR] to Play Again", width/2, height/2 + 40);
+    }
+  </script>
+
+</body>
+</html>
